@@ -51,6 +51,13 @@ fn main() {
         if option_str == "no-center" {
             should_center = false;
         }
+        // Render in DMS Desktop Command plugin compatible mode.
+        // Does not center, and only renders a single frame, then exits.
+        // The plugin handles calling at intervals.
+        if option_str == "dms-desktop-command" {
+            on_second(target_timestamp, false);
+            return;
+        }
     }
 
     let mut stdout = std::io::stdout();
