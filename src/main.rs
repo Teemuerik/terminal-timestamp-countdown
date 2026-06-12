@@ -14,13 +14,17 @@ fn wait_until_next_second() {
     thread::sleep(Duration::new(0, wait));
 }
 
-fn on_second(target_timestamp: i64) {
+fn on_second(target_timestamp: i64, should_center: bool) {
+    let now = SystemTime::now().duration_since(UNIX_EPOCH).unwrap();
+    let timestamp = now.as_secs() as i64;
+
+    if !should_center {
+        draw_countdown(timestamp, target_timestamp, 0, 0, should_center);
+        return;
+    }
+
     if let Some((w, h)) = term_size::dimensions() {
-        let now = SystemTime::now().duration_since(UNIX_EPOCH).unwrap();
-
-        let timestamp = now.as_secs() as i64;
-
-        draw_countdown(timestamp, target_timestamp, w, h);
+        draw_countdown(timestamp, target_timestamp, w, h, should_center);
     } else {
         println!("Unable to get term size.")
     }
@@ -40,6 +44,15 @@ fn main() {
         target_str.parse::<i64>().unwrap()
     };
 
+    let mut should_center = true;
+
+    if args.len() > 2 {
+        let option_str = args.get(2).unwrap();
+        if option_str == "no-center" {
+            should_center = false;
+        }
+    }
+
     let mut stdout = std::io::stdout();
     execute!(stdout, cursor::Hide).expect("Failed to hide cursor.");
 
@@ -55,11 +68,17 @@ fn main() {
     loop {
         wait_until_next_second();
 
-        on_second(target_timestamp);
+        on_second(target_timestamp, should_center);
     }
 }
 
-fn draw_countdown(timestamp: i64, target_timestamp: i64, width: usize, height: usize) {
+fn draw_countdown(
+    timestamp: i64,
+    target_timestamp: i64,
+    width: usize,
+    height: usize,
+    should_center: bool,
+) {
     // Clear the screen before drawing the next time.
     let mut stdout = std::io::stdout();
     execute!(
@@ -70,17 +89,23 @@ fn draw_countdown(timestamp: i64, target_timestamp: i64, width: usize, height: u
     .expect("Could not clear terminal and move cursor.");
     // Draw the next time.
 
-    const ART_HEIGHT: usize = 6;
-    let vertical_spaces = (height - ART_HEIGHT) / 2;
-    // Print newlines to center the countdown vertically.
-    let newlines = "\n".repeat(vertical_spaces);
-    print!("{newlines}");
+    if should_center {
+        const ART_HEIGHT: usize = 6;
+        let vertical_spaces = (height - ART_HEIGHT) / 2;
+        // Print newlines to center the countdown vertically.
+        let newlines = "\n".repeat(vertical_spaces);
+        print!("{newlines}");
+    }
 
     // Also center the countdown horizontally.
     const CHAR_WIDTH: usize = 8;
     let countdown_string = (target_timestamp - timestamp).to_string();
     let art_length = countdown_string.len() * CHAR_WIDTH;
-    let leading_spaces = (width - art_length) / 2;
+    let leading_spaces = if should_center {
+        (width - art_length) / 2
+    } else {
+        0
+    };
 
     match to_art(countdown_string, "default", leading_spaces, 0, 0) {
         Ok(string) => println!("{}", string),
