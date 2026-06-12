@@ -1,0 +1,10 @@
+[package]
+name = "terminal_countdown"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+text-to-ascii-art = "0.1.10"
+term_size = "0.3.2"
+crossterm = "0.29.0"
+ctrlc = "3.5.2"
