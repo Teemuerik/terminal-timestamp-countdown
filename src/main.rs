@@ -14,17 +14,31 @@ fn wait_until_next_second() {
     thread::sleep(Duration::new(0, wait));
 }
 
-fn on_second(target_timestamp: i64, should_center: bool) {
+fn on_second(target_timestamp: i64, should_center: bool, right_align_length: usize) {
     let now = SystemTime::now().duration_since(UNIX_EPOCH).unwrap();
     let timestamp = now.as_secs() as i64;
 
     if !should_center {
-        draw_countdown(timestamp, target_timestamp, 0, 0, should_center);
+        draw_countdown(
+            timestamp,
+            target_timestamp,
+            0,
+            0,
+            should_center,
+            right_align_length,
+        );
         return;
     }
 
     if let Some((w, h)) = term_size::dimensions() {
-        draw_countdown(timestamp, target_timestamp, w, h, should_center);
+        draw_countdown(
+            timestamp,
+            target_timestamp,
+            w,
+            h,
+            should_center,
+            right_align_length,
+        );
     } else {
         println!("Unable to get term size.")
     }
@@ -45,19 +59,40 @@ fn main() {
     };
 
     let mut should_center = true;
+    let mut dms_override = false;
+    let mut right_align_length = 0;
 
     if args.len() > 2 {
-        let option_str = args.get(2).unwrap();
-        if option_str == "no-center" {
-            should_center = false;
+        for argument in args[2..].iter() {
+            // Take only the name of the argument.
+            let mut parts = argument.split("=");
+            // Match the name of the argument.
+            let arg_name = parts.next();
+            match arg_name {
+                Some("--no-center") => should_center = false,
+                // Render in DMS Desktop Command plugin compatible mode.
+                // Does not center, and only renders a single frame, then exits.
+                // The plugin handles calling at intervals.
+                Some("--dms-desktop-command") => dms_override = true,
+                Some("--right-align-length") => {
+                    right_align_length = parts
+                        .next()
+                        .expect("Please pass in the length to --right-align-length=N")
+                        .parse::<usize>()
+                        .unwrap()
+                }
+                Some(&_) => {
+                    let argname_str = arg_name.unwrap();
+                    println!("Did not recognize argument: {argname_str}");
+                }
+                None => panic!("Found no arguments where there should be."),
+            }
         }
-        // Render in DMS Desktop Command plugin compatible mode.
-        // Does not center, and only renders a single frame, then exits.
-        // The plugin handles calling at intervals.
-        if option_str == "dms-desktop-command" {
-            on_second(target_timestamp, false);
-            return;
-        }
+    }
+
+    if dms_override {
+        on_second(target_timestamp, false, right_align_length);
+        return;
     }
 
     let mut stdout = std::io::stdout();
@@ -75,7 +110,7 @@ fn main() {
     loop {
         wait_until_next_second();
 
-        on_second(target_timestamp, should_center);
+        on_second(target_timestamp, should_center, right_align_length);
     }
 }
 
@@ -85,6 +120,7 @@ fn draw_countdown(
     width: usize,
     height: usize,
     should_center: bool,
+    right_align_length: usize,
 ) {
     // Clear the screen before drawing the next time.
     let mut stdout = std::io::stdout();
@@ -108,10 +144,15 @@ fn draw_countdown(
     const CHAR_WIDTH: usize = 8;
     let countdown_string = (target_timestamp - timestamp).to_string();
     let art_length = countdown_string.len() * CHAR_WIDTH;
-    let leading_spaces = if should_center {
-        (width - art_length) / 2
+    let computed_right_align_length = if right_align_length == 0 {
+        art_length
     } else {
-        0
+        right_align_length * CHAR_WIDTH
+    };
+    let leading_spaces = if should_center {
+        (width - art_length) / 2 + (computed_right_align_length - art_length)
+    } else {
+        computed_right_align_length - art_length
     };
 
     match to_art(countdown_string, "default", leading_spaces, 0, 0) {
